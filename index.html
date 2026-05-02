@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bloom Filter — Interactive Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0d1117;
+      --surface:    #161b22;
+      --surface-2:  #1c2128;
+      --border:     #30363d;
+      --text:       #e6edf3;
+      --muted:      #8b949e;
+      --accent:     #58a6ff;
+      --bit-off:    #21262d;
+      --bit-on:     #1f6feb;
+      --green:      #3fb950;
+      --red:        #f85149;
+      --yellow:     #d29922;
+      --purple:     #bc8cff;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 28px 16px 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    /* ── Header ── */
+    #header { text-align: center; max-width: 700px; }
+    #header h1 {
+      font-size: 2.6rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--purple) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    #header p { color: var(--muted); font-size: 1rem; margin-top: 6px; line-height: 1.5; }
+
+    /* ── Card ── */
+    .card {
+      width: 100%;
+      max-width: 720px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+    }
+    .card-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* ── Designer Panel ── */
+    #designer { display: flex; flex-direction: column; gap: 14px; }
+
+    .slider-row { display: flex; align-items: center; gap: 12px; }
+    .slider-row label { font-size: 0.95rem; color: var(--muted); min-width: 250px; }
+    .slider-row label b { color: var(--accent); font-weight: 700; }
+    .slider-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .sval {
+      min-width: 64px;
+      text-align: right;
+      font-family: 'Courier New', monospace;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    #formula-box {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      line-height: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .fline { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+    .fkey  { color: var(--purple); font-weight: 700; font-size: 1.05rem; }
+    .fval  { color: var(--yellow); }
+    .fres  { color: var(--green);  font-weight: 700; font-size: 1.1rem; }
+    .fdim  { color: var(--muted);  font-size: 0.85rem; }
+
+    .badges-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .badge {
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 1rem;
+      font-weight: 700;
+      border: 2px solid;
+      transition: transform 0.2s;
+    }
+    .badge-m { border-color: var(--accent); color: var(--accent); background: rgba(88,166,255,0.08); }
+    .badge-k { border-color: var(--purple); color: var(--purple); background: rgba(188,140,255,0.08); }
+    .badge.glow { animation: badge-glow 0.55s ease; }
+    @keyframes badge-glow {
+      0%,100% { box-shadow: none; }
+      50%     { box-shadow: 0 0 22px rgba(210,153,34,0.55); transform: scale(1.06); }
+    }
+
+    #btn-apply {
+      margin-left: auto;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: 2px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    #btn-apply:hover  { background: rgba(88,166,255,0.1); }
+    #btn-apply:active { transform: scale(0.95); }
+
+    /* ── Stats Bar ── */
+    #stats-bar {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      padding: 11px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.88rem;
+      flex-wrap: wrap;
+    }
+    .stat { display: flex; gap: 7px; }
+    .stat-lbl { color: var(--muted); }
+    .stat-val { font-weight: 700; font-family: 'Courier New', monospace; }
+    #stat-params { margin-left: auto; color: var(--border); font-family: monospace; font-size: 0.8rem; }
+
+    /* ── Bit Grid ── */
+    #bit-grid-wrap { width: 100%; max-width: 720px; }
+    #bit-grid-hdr {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+
+    #bit-grid {
+      display: grid;
+      gap: 5px;
+    }
+    /* Column layouts set via JS */
+
+    .bit-cell {
+      aspect-ratio: 1;
+      background: var(--bit-off);
+      color: #3a404a;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.1rem;
+      position: relative;
+      user-select: none;
+      transition: background 0.2s, color 0.2s;
+    }
+    .bit-cell.is-one { background: var(--bit-on); color: #fff; }
+    .cell-idx {
+      position: absolute;
+      bottom: 2px;
+      right: 4px;
+      font-size: 0.48rem;
+      font-weight: 400;
+      opacity: 0.4;
+      line-height: 1;
+    }
+    /* Medium grid */
+    #bit-grid.g16 { gap: 4px; }
+    #bit-grid.g16 .bit-cell { font-size: 0.7rem; border-radius: 4px; }
+    #bit-grid.g16 .cell-idx { display: none; }
+    /* Small grid */
+    #bit-grid.g32 { gap: 3px; }
+    #bit-grid.g32 .bit-cell { font-size: 0; border-radius: 3px; }
+    #bit-grid.g32 .cell-idx { display: none; }
+
+    /* Cell animations */
+    @keyframes bit-flip {
+      0%   { transform: scale(1);   background: var(--bit-off); color: #3a404a; }
+      28%  { transform: scale(1.55); background: var(--yellow);  color: #0d1117; }
+      65%  { transform: scale(1.2); background: var(--bit-on);  color: #fff; }
+      100% { transform: scale(1);   background: var(--bit-on);  color: #fff; }
+    }
+    @keyframes bit-pulse-green {
+      0%,100% { transform: scale(1);    box-shadow: none; }
+      50%     { transform: scale(1.25); box-shadow: 0 0 0 9px rgba(63,185,80,0.38); }
+    }
+    @keyframes bit-pulse-red {
+      0%,100% { transform: scale(1);    box-shadow: none; background: var(--bit-off); }
+      50%     { transform: scale(1.25); box-shadow: 0 0 0 9px rgba(248,81,73,0.38); background: rgba(248,81,73,0.22); }
+    }
+    @keyframes bit-already {
+      0%,100% { transform: scale(1);    box-shadow: none; }
+      50%     { transform: scale(1.18); box-shadow: 0 0 0 8px rgba(88,166,255,0.35); }
+    }
+    .a-flip   { animation: bit-flip        0.55s ease-out forwards; }
+    .a-green  { animation: bit-pulse-green 0.62s ease      both; }
+    .a-red    { animation: bit-pulse-red   0.62s ease      both; }
+    .a-blue   { animation: bit-already     0.45s ease      both; }
+
+    /* ── Hash Trace ── */
+    #hash-trace {
+      width: 100%;
+      max-width: 720px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 56px;
+    }
+    .hash-placeholder { color: var(--muted); font-size: 0.85rem; text-align: center; }
+    .hash-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.95rem;
+      opacity: 0;
+    }
+    .hash-row.show { animation: hrow-in 0.35s ease-out forwards; }
+    @keyframes hrow-in {
+      from { opacity: 0; transform: translateX(-14px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .hlbl { color: var(--purple); font-weight: 700; min-width: 30px; }
+    .hwrd { color: var(--yellow); font-weight: 700; }
+    .harr { color: var(--muted); }
+    .hpos {
+      color: var(--accent);
+      font-weight: 700;
+      background: rgba(88,166,255,0.1);
+      padding: 2px 10px;
+      border-radius: 4px;
+      border: 1px solid rgba(88,166,255,0.25);
+    }
+
+    /* ── Result Banner ── */
+    #result-banner {
+      width: 100%;
+      max-width: 720px;
+      border-radius: 12px;
+      padding: 16px 24px;
+      text-align: center;
+      font-size: 1.45rem;
+      font-weight: 900;
+      letter-spacing: 0.03em;
+      flex-direction: column;
+      gap: 5px;
+      display: none;
+    }
+    #result-banner.show { display: flex; animation: rbanner 0.38s cubic-bezier(0.175,0.885,0.32,1.275); }
+    @keyframes rbanner {
+      from { opacity: 0; transform: scale(0.86) translateY(8px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    #result-banner.r-ins  { background: rgba(88,166,255,0.1); border: 2px solid var(--accent); color: var(--accent); }
+    #result-banner.r-yes  { background: rgba(63,185,80,0.1);  border: 2px solid var(--green);  color: var(--green);  }
+    #result-banner.r-no   { background: rgba(248,81,73,0.1);  border: 2px solid var(--red);    color: var(--red);    }
+    #result-sub { font-size: 0.82rem; font-weight: 400; opacity: 0.82; }
+
+    /* ── Controls ── */
+    #controls { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 10px; }
+    #input-row { display: flex; gap: 9px; align-items: stretch; }
+
+    #word-input {
+      flex: 1;
+      font-size: 1.2rem;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #word-input:focus { border-color: var(--accent); }
+    #word-input.shake { animation: shake 0.38s ease; }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%     { transform: translateX(-7px); }
+      40%     { transform: translateX(7px); }
+      60%     { transform: translateX(-4px); }
+      80%     { transform: translateX(4px); }
+    }
+    .h-input { animation: hl-input 0.65s ease; }
+    @keyframes hl-input {
+      0%,100% { box-shadow: none; }
+      50%     { box-shadow: 0 0 0 4px rgba(88,166,255,0.28); border-color: var(--accent); }
+    }
+
+    .btn {
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.1s, opacity 0.15s;
+      white-space: nowrap;
+    }
+    .btn:active  { transform: scale(0.95); }
+    .btn:disabled { opacity: 0.38; cursor: not-allowed; transform: none !important; }
+    #btn-insert { background: var(--accent);   color: #0d1117; }
+    #btn-check  { background: transparent; border: 2px solid var(--accent); color: var(--accent); }
+
+    #action-row { display: flex; gap: 9px; }
+    #btn-auto   { flex: 1; background: var(--purple); color: #0d1117; }
+    #btn-reset  { background: var(--surface); border: 2px solid var(--border); color: var(--muted); }
+
+    /* ── Op Log ── */
+    #op-log {
+      width: 100%;
+      max-width: 720px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+    }
+    #op-log h3 {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    #log-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+    .log-entry {
+      display: flex;
+      gap: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.88rem;
+      align-items: center;
+      opacity: 0;
+      animation: log-in 0.3s ease forwards;
+    }
+    @keyframes log-in {
+      from { opacity: 0; transform: translateX(-6px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .lt-ins { color: var(--accent); font-weight: 700; }
+    .lt-yes { color: var(--green);  font-weight: 700; }
+    .lt-no  { color: var(--red);    font-weight: 700; }
+    .lw  { color: var(--text);  font-weight: 700; }
+    .lr  { color: var(--muted); font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<div id="header">
+  <h1>Bloom Filter</h1>
+  <p>A probabilistic data structure — space-efficient membership testing with guaranteed no false negatives.</p>
+</div>
+
+<!-- ═══════════════ DESIGNER ═══════════════ -->
+<div class="card" id="designer">
+  <div class="card-label">Filter Design Calculator — choosing m and k</div>
+
+  <div class="slider-row">
+    <label for="sl-n">Expected elements <b>(n)</b></label>
+    <input type="range" id="sl-n" min="1" max="500" value="10" step="1">
+    <span class="sval" id="vn">10</span>
+  </div>
+  <div class="slider-row">
+    <label for="sl-p">Target false positive rate <b>(p)</b></label>
+    <input type="range" id="sl-p" min="0.001" max="0.5" value="0.05" step="0.001">
+    <span class="sval" id="vp">5.0%</span>
+  </div>
+
+  <div id="formula-box">
+    <div class="fline">
+      <span class="fkey">m</span>
+      <span class="fdim">=</span>
+      <span class="fdim">⌈ −<span id="fn">10</span> × ln(<span id="fp">0.050</span>) / (ln&nbsp;2)² ⌉</span>
+      <span class="fdim">=</span>
+      <span class="fdim">⌈ <span id="fmi" class="fval">62.4</span> ⌉</span>
+      <span class="fdim">=</span>
+      <span id="fmr" class="fres">63</span>
+      <span class="fdim">bits</span>
+    </div>
+    <div class="fline">
+      <span class="fkey">k</span>
+      <span class="fdim">=</span>
+      <span class="fdim">⌈ (<span id="fm2">63</span> / <span id="fn2">10</span>) × ln&nbsp;2 ⌉</span>
+      <span class="fdim">=</span>
+      <span class="fdim">⌈ <span id="fki" class="fval">4.4</span> ⌉</span>
+      <span class="fdim">=</span>
+      <span id="fkr" class="fres">4</span>
+      <span class="fdim">hash functions</span>
+    </div>
+  </div>
+
+  <div class="badges-row">
+    <div class="badge badge-m" id="badge-m">m = 63 bits</div>
+    <div class="badge badge-k" id="badge-k">k = 4 hash functions</div>
+    <button id="btn-apply">Apply to Demo ↓</button>
+  </div>
+</div>
+
+<!-- ═══════════════ STATS BAR ═══════════════ -->
+<div id="stats-bar">
+  <div class="stat"><span class="stat-lbl">Items:</span><span class="stat-val" id="s-items">0</span></div>
+  <div class="stat"><span class="stat-lbl">Bit Occupancy:</span><span class="stat-val" id="s-occ">0.0%</span></div>
+  <div class="stat"><span class="stat-lbl">False Positive Rate:</span><span class="stat-val" id="s-fp">~0.00%</span></div>
+  <span id="stat-params">m=64, k=3</span>
+</div>
+
+<!-- ═══════════════ BIT GRID ═══════════════ -->
+<div id="bit-grid-wrap">
+  <div id="bit-grid-hdr">
+    Bit Array
+    <span id="grid-params" style="color:var(--border);font-family:monospace">(m=64, k=3)</span>
+  </div>
+  <div id="bit-grid"></div>
+</div>
+
+<!-- ═══════════════ HASH TRACE ═══════════════ -->
+<div id="hash-trace">
+  <span class="hash-placeholder">Hash positions will appear here during operations</span>
+</div>
+
+<!-- ═══════════════ RESULT BANNER ═══════════════ -->
+<div id="result-banner">
+  <span id="result-text"></span>
+  <span id="result-sub"></span>
+</div>
+
+<!-- ═══════════════ CONTROLS ═══════════════ -->
+<section id="controls">
+  <div id="input-row">
+    <input type="text" id="word-input" placeholder="Type a word…" maxlength="20" autocomplete="off" spellcheck="false">
+    <button class="btn" id="btn-insert">Insert</button>
+    <button class="btn" id="btn-check">Check</button>
+  </div>
+  <div id="action-row">
+    <button class="btn" id="btn-auto">▶ Auto Demo</button>
+    <button class="btn" id="btn-reset">↺ Reset</button>
+  </div>
+</section>
+
+<!-- ═══════════════ OP LOG ═══════════════ -->
+<div id="op-log">
+  <h3>Operation Log</h3>
+  <ul id="log-list"></ul>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// Hash functions
+// ══════════════════════════════════════════════════════════
+function djb2(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++)
+    h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+  return h;
+}
+function fnv1a(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+
+// ══════════════════════════════════════════════════════════
+// Bloom Filter
+// ══════════════════════════════════════════════════════════
+class BloomFilter {
+  constructor(m, k) {
+    this.m = m; this.k = k;
+    this.bits = new Uint8Array(m);
+    this.itemCount = 0;
+  }
+  positions(word) {
+    const h1 = djb2(word), h2 = fnv1a(word);
+    return Array.from({length: this.k}, (_, i) => ((h1 + i * h2) >>> 0) % this.m);
+  }
+  add(word) {
+    const pos = this.positions(word);
+    const wasZero = pos.map(p => this.bits[p] === 0);
+    pos.forEach(p => { this.bits[p] = 1; });
+    this.itemCount++;
+    return { pos, wasZero };
+  }
+  check(word) {
+    const pos = this.positions(word);
+    const vals = pos.map(p => this.bits[p]);
+    return { found: vals.every(v => v === 1), pos, vals };
+  }
+  occupancy() {
+    let c = 0; for (const b of this.bits) c += b; return c / this.m;
+  }
+  fpRate() {
+    if (!this.itemCount) return 0;
+    return Math.pow(1 - Math.exp(-(this.k * this.itemCount) / this.m), this.k);
+  }
+  reset() { this.bits = new Uint8Array(this.m); this.itemCount = 0; }
+}
+
+// ══════════════════════════════════════════════════════════
+// Param calculator
+// ══════════════════════════════════════════════════════════
+function calcParams(n, p) {
+  const m = Math.max(1, Math.ceil(-(n * Math.log(p)) / (Math.LN2 * Math.LN2)));
+  const k = Math.max(1, Math.ceil((m / n) * Math.LN2));
+  return { m, k };
+}
+
+// ══════════════════════════════════════════════════════════
+// Sleep helper
+// ══════════════════════════════════════════════════════════
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ══════════════════════════════════════════════════════════
+// UI
+// ══════════════════════════════════════════════════════════
+const UI = {
+  bloom: null,
+  cells: [],
+  busy: false,
+  autoRunning: false,
+
+  init() {
+    this.bloom = new BloomFilter(64, 3);
+    this.buildGrid(64);
+    this.updateStats();
+    this.bindEvents();
+    this.updateDesigner();
+  },
+
+  // ── Grid ──────────────────────────────────────────────
+  buildGrid(m) {
+    const grid = document.getElementById('bit-grid');
+    grid.innerHTML = '';
+    this.cells = [];
+    let cols, cls;
+    if      (m <= 64)  { cols = 8;  cls = ''; }
+    else if (m <= 128) { cols = 16; cls = 'g16'; }
+    else               { cols = 32; cls = 'g32'; }
+    grid.className = cls;
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+    for (let i = 0; i < m; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'bit-cell';
+      const v = document.createElement('span');
+      v.className = 'cell-v'; v.textContent = '0';
+      const ix = document.createElement('span');
+      ix.className = 'cell-idx'; ix.textContent = i;
+      cell.append(v, ix);
+      grid.appendChild(cell);
+      this.cells.push(cell);
+    }
+    const label = `(m=${this.bloom.m}, k=${this.bloom.k})`;
+    document.getElementById('grid-params').textContent = label;
+    document.getElementById('stat-params').textContent = `m=${this.bloom.m}, k=${this.bloom.k}`;
+  },
+
+  syncGrid() {
+    this.cells.forEach((cell, i) => {
+      const on = this.bloom.bits[i] === 1;
+      cell.classList.toggle('is-one', on);
+      cell.querySelector('.cell-v').textContent = on ? '1' : '0';
+    });
+  },
+
+  // ── Stats ─────────────────────────────────────────────
+  updateStats() {
+    document.getElementById('s-items').textContent = this.bloom.itemCount;
+    document.getElementById('s-occ').textContent   = (this.bloom.occupancy()*100).toFixed(1) + '%';
+    document.getElementById('s-fp').textContent    = '~' + (this.bloom.fpRate()*100).toFixed(2) + '%';
+  },
+
+  // ── Hash trace ────────────────────────────────────────
+  showTrace(word, positions) {
+    const panel = document.getElementById('hash-trace');
+    panel.innerHTML = '';
+    positions.forEach((pos, i) => {
+      const row = document.createElement('div');
+      row.className = 'hash-row';
+      row.innerHTML =
+        `<span class="hlbl">h<sub>${i+1}</sub></span>` +
+        `<span class="harr">(</span><span class="hwrd">"${word}"</span><span class="harr">)</span>` +
+        `<span class="harr">→</span>` +
+        `<span class="hpos">bit[${pos}]</span>`;
+      panel.appendChild(row);
+      // stagger the slide-in animation
+      setTimeout(() => row.classList.add('show'), i * 180);
+    });
+  },
+
+  clearTrace() {
+    document.getElementById('hash-trace').innerHTML =
+      '<span class="hash-placeholder">Hash positions will appear here during operations</span>';
+  },
+
+  // ── Result banner ─────────────────────────────────────
+  showResult(cls, text, sub) {
+    const b = document.getElementById('result-banner');
+    b.className = `show ${cls}`;
+    document.getElementById('result-text').textContent = text;
+    document.getElementById('result-sub').textContent  = sub || '';
+  },
+
+  hideResult() {
+    document.getElementById('result-banner').className = '';
+  },
+
+  // ── Cell animation ────────────────────────────────────
+  animCell(idx, animCls, duration) {
+    return new Promise(resolve => {
+      const cell = this.cells[idx];
+      if (!cell) { resolve(); return; }
+      cell.classList.remove('a-flip','a-green','a-red','a-blue');
+      void cell.offsetWidth;
+      cell.classList.add(animCls);
+      setTimeout(() => {
+        cell.classList.remove(animCls);
+        resolve();
+      }, duration);
+    });
+  },
+
+  // ── Input highlight ───────────────────────────────────
+  pulseInput() {
+    const el = document.getElementById('word-input');
+    el.classList.remove('h-input');
+    void el.offsetWidth;
+    el.classList.add('h-input');
+    return sleep(280);
+  },
+
+  // ── Lock / unlock ─────────────────────────────────────
+  lock() {
+    this.busy = true;
+    ['btn-insert','btn-check','btn-auto','word-input'].forEach(id =>
+      (document.getElementById(id).disabled = true));
+  },
+  unlock() {
+    this.busy = false;
+    if (this.autoRunning) return;
+    ['btn-insert','btn-check','btn-auto','word-input'].forEach(id =>
+      (document.getElementById(id).disabled = false));
+  },
+
+  // ── Validate ──────────────────────────────────────────
+  validate(raw) {
+    const w = raw.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return w.length ? w : null;
+  },
+
+  // ── Add to log ────────────────────────────────────────
+  log(type, word, found) {
+    const list = document.getElementById('log-list');
+    const li = document.createElement('li');
+    li.className = 'log-entry';
+    let cls, label, result;
+    if (type === 'ins') {
+      cls = 'lt-ins'; label = 'INSERT'; result = '→ inserted';
+    } else if (found) {
+      cls = 'lt-yes'; label = 'CHECK'; result = '→ possibly found';
+    } else {
+      cls = 'lt-no'; label = 'CHECK'; result = '→ not found';
+    }
+    li.innerHTML = `<span class="${cls}">${label}</span><span class="lw">"${word}"</span><span class="lr">${result}</span>`;
+    list.prepend(li);
+    while (list.children.length > 8) list.removeChild(list.lastChild);
+  },
+
+  // ══════════════════════════════════════════════════════
+  // Core operations
+  // ══════════════════════════════════════════════════════
+  async doInsert(word) {
+    if (this.busy) return;
+    this.lock();
+    this.hideResult();
+
+    await this.pulseInput();
+    await sleep(120);
+
+    // Get positions BEFORE adding so we know which were 0
+    const prePos = this.bloom.positions(word);
+    const wasZero = prePos.map(p => this.bloom.bits[p] === 0);
+
+    // Show hash trace
+    this.showTrace(word, prePos);
+    await sleep(prePos.length * 180 + 250);
+
+    // Actually insert
+    this.bloom.add(word);
+
+    // Animate each bit
+    for (let i = 0; i < prePos.length; i++) {
+      if (wasZero[i]) {
+        await this.animCell(prePos[i], 'a-flip', 550);
+        // Update cell DOM after flip
+        const cell = this.cells[prePos[i]];
+        if (cell) {
+          cell.classList.add('is-one');
+          cell.querySelector('.cell-v').textContent = '1';
+        }
+      } else {
+        await this.animCell(prePos[i], 'a-blue', 450);
+      }
+      if (i < prePos.length - 1) await sleep(180);
+    }
+
+    this.updateStats();
+    this.showResult('r-ins', `✓  Inserted "${word}"`,
+      `Set bits at positions: [${prePos.join(', ')}]`);
+    this.log('ins', word, true);
+    await sleep(600);
+    this.unlock();
+  },
+
+  async doCheck(word) {
+    if (this.busy) return;
+    this.lock();
+    this.hideResult();
+
+    await this.pulseInput();
+    await sleep(120);
+
+    const { found, pos, vals } = this.bloom.check(word);
+
+    this.showTrace(word, pos);
+    await sleep(pos.length * 180 + 250);
+
+    for (let i = 0; i < pos.length; i++) {
+      await this.animCell(pos[i], vals[i] ? 'a-green' : 'a-red', 620);
+      if (i < pos.length - 1) await sleep(180);
+    }
+
+    if (found) {
+      this.showResult('r-yes', '◉  POSSIBLY IN SET',
+        'All hash positions are 1 — but false positives are possible!');
+    } else {
+      this.showResult('r-no', '✗  DEFINITELY NOT IN SET',
+        'At least one hash position is 0 — guaranteed absent.');
+    }
+    this.log('chk', word, found);
+    await sleep(700);
+    this.unlock();
+  },
+
+  // ══════════════════════════════════════════════════════
+  // Auto demo
+  // ══════════════════════════════════════════════════════
+  async runAutoDemo() {
+    if (this.autoRunning) return;
+    this.autoRunning = true;
+    document.getElementById('btn-auto').disabled = true;
+
+    // Reset state
+    this.bloom.reset();
+    this.syncGrid();
+    this.updateStats();
+    this.hideResult();
+    this.clearTrace();
+    document.getElementById('log-list').innerHTML = '';
+
+    const INSERTS = ['apple','mango','tiger','ocean','cedar',
+                     'pluto','storm','quartz','fox','robin'];
+
+    const FP_POOL = ['banana','grape','lemon','peach','berry',
+                     'melon','kiwi','plum','lime','pear',
+                     'rose','lily','wolf','bear','deer','crow','dove'];
+
+    // Insert phase
+    for (const w of INSERTS) {
+      document.getElementById('word-input').value = w;
+      await this.doInsert(w);
+      await sleep(200);
+    }
+
+    await sleep(500);
+
+    const insertedSet = new Set(INSERTS);
+
+    // Find a false positive
+    let fpWord = null;
+    for (const w of FP_POOL) {
+      if (insertedSet.has(w)) continue;
+      if (this.bloom.check(w).found) { fpWord = w; break; }
+    }
+
+    // Find a true negative
+    let tnWord = null;
+    for (const w of FP_POOL) {
+      if (insertedSet.has(w) || w === fpWord) continue;
+      if (!this.bloom.check(w).found) { tnWord = w; break; }
+    }
+
+    // Query: true positive
+    document.getElementById('word-input').value = INSERTS[0];
+    await this.doCheck(INSERTS[0]);
+    await sleep(200);
+
+    // Query: false positive (if found)
+    if (fpWord) {
+      document.getElementById('word-input').value = fpWord;
+      await this.doCheck(fpWord);
+      await sleep(200);
+    }
+
+    // Query: true negative
+    if (tnWord) {
+      document.getElementById('word-input').value = tnWord;
+      await this.doCheck(tnWord);
+    }
+
+    this.autoRunning = false;
+    this.unlock();
+    document.getElementById('btn-auto').disabled = false;
+  },
+
+  // ══════════════════════════════════════════════════════
+  // Reset
+  // ══════════════════════════════════════════════════════
+  resetAll() {
+    this.autoRunning = false;
+    this.busy = false;
+    this.bloom.reset();
+    this.syncGrid();
+    this.updateStats();
+    this.hideResult();
+    this.clearTrace();
+    document.getElementById('word-input').value = '';
+    document.getElementById('log-list').innerHTML = '';
+    ['btn-insert','btn-check','btn-auto','word-input'].forEach(id =>
+      (document.getElementById(id).disabled = false));
+  },
+
+  // ══════════════════════════════════════════════════════
+  // Designer panel
+  // ══════════════════════════════════════════════════════
+  updateDesigner() {
+    const n = parseInt(document.getElementById('sl-n').value);
+    const p = parseFloat(document.getElementById('sl-p').value);
+    const { m, k } = calcParams(n, p);
+
+    document.getElementById('vn').textContent = n;
+    document.getElementById('vp').textContent = (p * 100).toFixed(1) + '%';
+
+    document.getElementById('fn').textContent = n;
+    document.getElementById('fp').textContent = p.toFixed(3);
+    const mInner = -(n * Math.log(p)) / (Math.LN2 * Math.LN2);
+    document.getElementById('fmi').textContent = mInner.toFixed(1);
+    document.getElementById('fmr').textContent = m;
+    document.getElementById('fm2').textContent = m;
+    document.getElementById('fn2').textContent = n;
+    const kInner = (m / n) * Math.LN2;
+    document.getElementById('fki').textContent = kInner.toFixed(1);
+    document.getElementById('fkr').textContent = k;
+
+    document.getElementById('badge-m').textContent = `m = ${m} bits`;
+    document.getElementById('badge-k').textContent = `k = ${k} hash functions`;
+
+    ['badge-m','badge-k'].forEach(id => {
+      const el = document.getElementById(id);
+      el.classList.remove('glow');
+      void el.offsetWidth;
+      el.classList.add('glow');
+    });
+  },
+
+  // ══════════════════════════════════════════════════════
+  // Event wiring
+  // ══════════════════════════════════════════════════════
+  bindEvents() {
+    document.getElementById('sl-n').addEventListener('input', () => this.updateDesigner());
+    document.getElementById('sl-p').addEventListener('input', () => this.updateDesigner());
+
+    document.getElementById('btn-apply').addEventListener('click', () => {
+      if (this.autoRunning || this.busy) return;
+      const n = parseInt(document.getElementById('sl-n').value);
+      const p = parseFloat(document.getElementById('sl-p').value);
+      let { m, k } = calcParams(n, p);
+      const capped = m > 256;
+      if (capped) m = 256;
+      this.bloom = new BloomFilter(m, k);
+      this.buildGrid(m);
+      this.syncGrid();
+      this.updateStats();
+      this.hideResult();
+      this.clearTrace();
+      document.getElementById('log-list').innerHTML = '';
+      if (capped) {
+        alert(`m was capped at 256 for display purposes.\n(Computed optimal: ${Math.ceil(-(n * Math.log(p)) / (Math.LN2 * Math.LN2))} bits)`);
+      }
+    });
+
+    document.getElementById('btn-insert').addEventListener('click', () => {
+      const w = this.validate(document.getElementById('word-input').value);
+      if (!w) { this.shakeInput(); return; }
+      this.doInsert(w);
+    });
+
+    document.getElementById('btn-check').addEventListener('click', () => {
+      const w = this.validate(document.getElementById('word-input').value);
+      if (!w) { this.shakeInput(); return; }
+      this.doCheck(w);
+    });
+
+    document.getElementById('word-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const b = document.getElementById('btn-insert');
+        if (!b.disabled) b.click();
+      }
+    });
+
+    document.getElementById('btn-auto').addEventListener('click', () => this.runAutoDemo());
+    document.getElementById('btn-reset').addEventListener('click', () => this.resetAll());
+  },
+
+  shakeInput() {
+    const el = document.getElementById('word-input');
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+    setTimeout(() => el.classList.remove('shake'), 400);
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => UI.init());
+</script>
+</body>
+</html>
